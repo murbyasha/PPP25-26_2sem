@@ -48,6 +48,9 @@ class Hex:
         self.s = -q - r
 
     def __eq__(self, other):
+        # Исправлено: проверяем, что other не None
+        if other is None:
+            return False
         return self.q == other.q and self.r == other.r
 
     def __hash__(self):
@@ -90,28 +93,20 @@ class Pawn(Piece):
     def get_possible_moves(self, board):
         moves = []
         # Направление движения зависит от игрока
-        # Игроки расположены на разных сторонах: для простоты зададим смещения вручную
-        # Упрощённо: пешка двигается вперёд по одному из двух направлений (зависит от начальной позиции)
-        # В гексагональных шахматах пешки обычно ходят на одну клетку вперёд (в сторону центра) и бьют по диагонали.
-        # Для каждого игрока определим свои векторы "вперёд" и "диагонали".
         forward_map = {
             'red': [Hex(1, -1), Hex(1, 0)],          # два направления вперёд (примерно вниз-вправо)
             'green': [Hex(0, -1), Hex(-1, 0)],       # вниз-влево
             'blue': [Hex(-1, 1), Hex(0, 1)]          # вверх
         }
-        capture_map = {
-            'red': [Hex(1, -1), Hex(1, 0)],           # те же направления, но могут бить только по диагонали
-            'green': [Hex(0, -1), Hex(-1, 0)],
-            'blue': [Hex(-1, 1), Hex(0, 1)]
-        }
-        # Для простоты: пешка может двигаться на одну клетку вперёд, если она пуста,
-        # и бить по тем же направлениям (в реальности пешка бьёт по диагонали, но для упрощения оставим так)
+        
+        # Движение вперёд
         for d in forward_map.get(self.owner, []):
             new_hex = Hex(self.hex.q + d.q, self.hex.r + d.r)
             if board.is_inside(new_hex) and board.get_piece_at(new_hex) is None:
                 moves.append(new_hex)
-        # Взятие: пешка может бить по тем же направлениям (в упрощённой версии)
-        for d in capture_map.get(self.owner, []):
+        
+        # Взятие (пешка может бить по тем же направлениям)
+        for d in forward_map.get(self.owner, []):
             new_hex = Hex(self.hex.q + d.q, self.hex.r + d.r)
             target = board.get_piece_at(new_hex)
             if target and target.owner != self.owner:
@@ -145,8 +140,6 @@ class Knight(Piece):
         self.symbol = '♞'
 
     def get_possible_moves(self, board):
-        # Конь ходит буквой "Г" на гексагональной сетке: (2,1) в разных комбинациях
-        # Генерация всех комбинаций с использованием двух шагов в разных направлениях
         moves = []
         for d1 in HEX_DIRECTIONS:
             step1 = Hex(self.hex.q + d1.q, self.hex.r + d1.r)
@@ -166,7 +159,6 @@ class Bishop(Piece):
         self.symbol = '♝'
 
     def get_possible_moves(self, board):
-        # Слон ходит по диагоналям гексагональной сетки (направления через один)
         diagonal_dirs = [HEX_DIRECTIONS[i] for i in [0, 2, 4]]
         moves = []
         for direction in diagonal_dirs:
@@ -189,9 +181,7 @@ class Queen(Piece):
         self.symbol = '♛'
 
     def get_possible_moves(self, board):
-        # Ферзь = ладья + слон
         moves = Rook.get_possible_moves(self, board) + Bishop.get_possible_moves(self, board)
-        # Убираем дубликаты (поскольку могут быть одинаковые клетки)
         return list(set(moves))
 
 class King(Piece):
@@ -215,12 +205,11 @@ class King(Piece):
 class HexBoard:
     """Гексагональная доска с тремя игроками."""
     def __init__(self, radius=4):
-        # Радиус доски (количество колец от центра) – всего клеток 1 + 3*radius*(radius+1)
         self.radius = radius
-        self.cells = {}          # словарь {Hex: Piece or None}
+        self.cells = {}
         self.generate_board()
-        self.current_turn = 'red'   # порядок ходов: red -> green -> blue -> red...
-        self.king_positions = {}     # позиции королей для каждого игрока
+        self.current_turn = 'red'
+        self.king_positions = {}
 
     def generate_board(self):
         """Создаёт все клетки гексагональной доски."""
@@ -243,37 +232,29 @@ class HexBoard:
                 piece.hex = hex
 
     def move_piece(self, start_hex, end_hex):
-        """Перемещает фигуру с start_hex на end_hex, если ход допустим.
-           Возвращает True при успехе."""
+        """Перемещает фигуру с start_hex на end_hex, если ход допустим."""
         piece = self.get_piece_at(start_hex)
         if piece is None or piece.owner != self.current_turn:
             return False
 
-        # Проверяем, допустим ли ход для фигуры
         possible_moves = piece.get_possible_moves(self)
         if end_hex not in possible_moves:
             return False
 
         captured = self.get_piece_at(end_hex)
-        # Сохраняем состояния
         self.cells[end_hex] = piece
         self.cells[start_hex] = None
         piece.hex = end_hex
 
-        # Обновляем позицию короля
         if isinstance(piece, King):
             self.king_positions[piece.owner] = end_hex
-
-        # Проверяем, не подставили ли мы своего короля под шах (упрощённо: не проверяем, т.к. нет полной логики шаха)
-        # Здесь можно добавить проверку, но для простоты опустим
 
         # Смена хода
         turn_order = ['red', 'green', 'blue']
         idx = turn_order.index(self.current_turn)
         self.current_turn = turn_order[(idx + 1) % 3]
 
-        # Превращение пешки (при достижении противоположной стороны – упрощённо: при достижении дальнего кольца)
-        # Для простоты: если пешка достигает любой клетки с расстоянием от центра == radius, превращаем в ферзя
+        # Превращение пешки
         if isinstance(piece, Pawn):
             if abs(piece.hex.q) == self.radius or abs(piece.hex.r) == self.radius or abs(piece.hex.s) == self.radius:
                 self.cells[end_hex] = Queen(piece.owner, end_hex)
@@ -286,51 +267,41 @@ class HexBoard:
 
     def setup_start_position(self):
         """Расставляет начальные фигуры для трёх игроков."""
-        # Определяем стартовые зоны: для каждого игрока выделяем три стороны шестиугольника
-        # red – нижняя сторона (q от -radius до radius, r = -radius)
-        # green – левая сторона (r от -radius до radius, q = -radius)
-        # blue – правая сторона (s = -radius, то есть q+r = radius)
-
-        # Пешки на расстоянии 1 от границы, фигуры на границе
-        # Создаём фигуры вручную для простоты (можно сгенерировать по шаблону)
-
         # Очищаем доску
         for hex in self.cells:
             self.cells[hex] = None
 
-        # Функция для создания линии клеток по условию
-        def cells_on_ring(ring):
-            return [h for h in self.cells if max(abs(h.q), abs(h.r), abs(h.s)) == ring]
-
-        # Красные фигуры: нижняя сторона (r = -radius)
-        red_start = [h for h in self.cells if h.r == -self.radius and abs(h.q) <= self.radius]
-        # Порядок фигур: от q = -radius до radius: ладья, конь, слон, ферзь, король, слон, конь, ладья, пешки на следующем кольце
-        red_rank = sorted(red_start, key=lambda h: h.q)
         pieces_order = [Rook, Knight, Bishop, Queen, King, Bishop, Knight, Rook]
+
+        # Красные фигуры (нижняя сторона)
+        red_start = [h for h in self.cells if h.r == -self.radius and abs(h.q) <= self.radius]
+        red_rank = sorted(red_start, key=lambda h: h.q)
         for i, hex in enumerate(red_rank):
             if i < len(pieces_order):
                 self.set_piece_at(hex, pieces_order[i]('red', hex))
-        # Пешки красных: клетки с r = -radius+1
+        
         red_pawns = [h for h in self.cells if h.r == -self.radius + 1 and abs(h.q) <= self.radius - 1]
         for hex in red_pawns:
             self.set_piece_at(hex, Pawn('red', hex))
 
-        # Зелёные фигуры: левая сторона (q = -radius)
+        # Зелёные фигуры (левая сторона)
         green_start = [h for h in self.cells if h.q == -self.radius and abs(h.r) <= self.radius]
         green_rank = sorted(green_start, key=lambda h: h.r)
         for i, hex in enumerate(green_rank):
             if i < len(pieces_order):
                 self.set_piece_at(hex, pieces_order[i]('green', hex))
+        
         green_pawns = [h for h in self.cells if h.q == -self.radius + 1 and abs(h.r) <= self.radius - 1]
         for hex in green_pawns:
             self.set_piece_at(hex, Pawn('green', hex))
 
-        # Синие фигуры: правая сторона (s = -radius, т.е. q+r = radius)
+        # Синие фигуры (правая сторона)
         blue_start = [h for h in self.cells if h.q + h.r == self.radius and abs(h.q) <= self.radius]
         blue_rank = sorted(blue_start, key=lambda h: h.q)
         for i, hex in enumerate(blue_rank):
             if i < len(pieces_order):
                 self.set_piece_at(hex, pieces_order[i]('blue', hex))
+        
         blue_pawns = [h for h in self.cells if h.q + h.r == self.radius - 1 and abs(h.q) <= self.radius - 1]
         for hex in blue_pawns:
             self.set_piece_at(hex, Pawn('blue', hex))
@@ -363,7 +334,6 @@ class HexUI:
         center_x = SCREEN_WIDTH // 2
         center_y = SCREEN_HEIGHT // 2
         for hex in self.board.cells:
-            # Преобразование кубических координат в пиксельные (axial)
             x = center_x + HEX_HORIZONTAL_SPACING * (hex.q + hex.r / 2)
             y = center_y + HEX_VERTICAL_SPACING * hex.r
             self.hex_pixels[hex] = (x, y)
@@ -373,7 +343,7 @@ class HexUI:
         center = self.hex_pixels[hex]
         points = []
         for i in range(6):
-            angle_deg = 60 * i - 30  # для плоских вершин
+            angle_deg = 60 * i - 30
             angle_rad = math.radians(angle_deg)
             x = center[0] + HEX_RADIUS * math.cos(angle_rad)
             y = center[1] + HEX_RADIUS * math.sin(angle_rad)
@@ -385,19 +355,18 @@ class HexUI:
     def draw_board(self):
         """Рисует доску (клетки и фигуры)."""
         for hex in self.board.cells:
-            # Определяем цвет клетки: по умолчанию светлый, если выбранная – выделяем
+            # Определяем цвет клетки
             color = COLOR_CELL
-            if self.selected_hex == hex:
-                # Полупрозрачная подсветка
-                s = pygame.Surface((HEX_RADIUS*2, HEX_RADIUS*2), pygame.SRCALPHA)
-                s.fill(COLOR_SELECTED)
+            
+            # Исправлено: явная проверка на None
+            if self.selected_hex is not None and self.selected_hex == hex:
                 self.draw_hexagon(hex, COLOR_SELECTED, fill=True)
             else:
                 self.draw_hexagon(hex, color, fill=True)
+            
             # Рисуем фигуру
             piece = self.board.get_piece_at(hex)
             if piece:
-                # Цвет фигуры соответствует игроку
                 piece_color = PIECE_COLORS[piece.owner]
                 text = self.font.render(piece.symbol, True, piece_color)
                 text_rect = text.get_rect(center=self.hex_pixels[hex])
@@ -405,7 +374,6 @@ class HexUI:
 
         # Рисуем подсветку возможных ходов
         for hex in self.valid_moves:
-            # Рисуем полупрозрачный зелёный круг
             s = pygame.Surface((HEX_RADIUS*2, HEX_RADIUS*2), pygame.SRCALPHA)
             pygame.draw.circle(s, COLOR_MOVE, (HEX_RADIUS, HEX_RADIUS), HEX_RADIUS//2)
             self.screen.blit(s, (self.hex_pixels[hex][0]-HEX_RADIUS, self.hex_pixels[hex][1]-HEX_RADIUS))
@@ -437,21 +405,17 @@ class HexUI:
             piece = self.board.get_piece_at(hex)
             if piece and piece.owner == self.board.current_turn:
                 self.selected_hex = hex
-                # Вычисляем допустимые ходы для этой фигуры
                 self.valid_moves = piece.get_possible_moves(self.board)
         else:
             # Пытаемся сделать ход
             if hex in self.valid_moves:
                 if self.board.move_piece(self.selected_hex, hex):
-                    # Ход успешен, снимаем выделение
                     self.selected_hex = None
                     self.valid_moves = []
                 else:
-                    # Ход не удался (например, из-за шаха)
                     self.selected_hex = None
                     self.valid_moves = []
             else:
-                # Клик по другой клетке – снимаем выделение
                 self.selected_hex = None
                 self.valid_moves = []
 
@@ -466,7 +430,6 @@ class HexUI:
                 if event.type == pygame.MOUSEBUTTONDOWN:
                     self.handle_click()
 
-            # Отрисовка
             self.screen.fill(COLOR_BG)
             self.draw_board()
             pygame.display.flip()
@@ -476,7 +439,7 @@ class HexUI:
 # Запуск игры
 # ----------------------------------------------------------------------
 if __name__ == "__main__":
-    board = HexBoard(radius=4)      # радиус 4 -> 37 клеток
+    board = HexBoard(radius=4)
     board.setup_start_position()
     ui = HexUI(board)
     ui.run()
