@@ -48,8 +48,11 @@ class Hex:
         self.s = -q - r
 
     def __eq__(self, other):
-        # Исправлено: проверяем, что other не None
+        # Важно: сначала проверяем, что other не None
         if other is None:
+            return False
+        # Проверяем, что other является объектом Hex (или имеет атрибуты q и r)
+        if not hasattr(other, 'q') or not hasattr(other, 'r'):
             return False
         return self.q == other.q and self.r == other.r
 
@@ -358,7 +361,7 @@ class HexUI:
             # Определяем цвет клетки
             color = COLOR_CELL
             
-            # Исправлено: явная проверка на None
+            # Критическое исправление: явная проверка на None перед сравнением
             if self.selected_hex is not None and self.selected_hex == hex:
                 self.draw_hexagon(hex, COLOR_SELECTED, fill=True)
             else:
