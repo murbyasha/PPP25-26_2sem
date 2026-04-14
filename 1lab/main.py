@@ -162,7 +162,7 @@ class Board:
 
 #6. осн цикл программы
 def main():
-    mode = input("Выберите режим (1 - шахматы, 2 - щашки): ")
+    mode = input("Выберите режим (1 - шахматы, 2 - шашки): ")
     game_mode = 'chess' if mode == '1' else 'checkers'
     board = Board(game_mode)
     
