@@ -368,15 +368,22 @@ def demo():
     plot_polygons(filtered_6, 6, ax=ax, color='crimson', title='6 фигур после фильтрации (короткая сторона < 1.0)')
     plt.show()
 
-    # 6.2 из ≥ 15 фигур разного масштаба отобрать ≤ 4
-    all_scaled = map(lambda s: tr_homothety(s, (0,0))(base_square), [0.5 + 0.1*i for i in range(20)])
+    # 6.2 из ≥ 15 фигур разного масштаба отобрать ≤ 4 с кратчайшей стороной меньше заданного значения
+    # Используем меньшие масштабы, чтобы были фигуры с маленькими сторонами
+    all_scaled = map(lambda s: tr_homothety(s, (0,0))(base_square), 
+                     [0.1 + 0.05*i for i in range(20)])  # масштабы от 0.1 до 1.05
     short_side_limit = 0.4
     filtered_small_side = filter(flt_short_side(short_side_limit), all_scaled)
-    limited = itertools.islice(filtered_small_side, 4)
-    
-    fig, ax = plt.subplots(figsize=(8, 8))
-    plot_polygons(limited, 4, ax=ax, color='navy', title=f'≤4 фигуры с кратчайшей стороной < {short_side_limit}')
-    plt.show()
+    limited = list(itertools.islice(filtered_small_side, 4))
+
+    print(f"Найдено фигур с короткой стороной < {short_side_limit}: {len(limited)}")
+    if len(limited) > 0:
+        fig, ax = plt.subplots(figsize=(8, 8))
+        plot_polygons(iter(limited), len(limited), ax=ax, color='navy', 
+                      title=f'≤4 фигуры с кратчайшей стороной < {short_side_limit}')
+        plt.show()
+    else:
+        print("Не найдено фигур, удовлетворяющих условию")
 
     # 6.3 из ≥ 15 пересекающихся фигур отфильтровать непересекающиеся
     base = gen_rectangle(w=1.0, h=0.5, step_x=0.0)
